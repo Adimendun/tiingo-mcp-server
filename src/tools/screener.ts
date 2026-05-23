@@ -30,7 +30,7 @@ Returns: Comparison table with price, change%, volume, and available valuation m
       const fundamentals: Record<string, Record<string, unknown>> = {};
       await Promise.all(upperTickers.map(async (ticker) => {
         try {
-          const data = await tiingoFetch<Array<Record<string, unknown>>>(`/fundamentals/${ticker}/daily`, {
+          const data = await tiingoFetch<Array<Record<string, unknown>>>(`/tiingo/fundamentals/${ticker}/daily`, {
             startDate: defaultStartDate(7),
             endDate: todayDate()
           });
@@ -122,7 +122,7 @@ Returns: Current rate, daily change, and last 5 days of history`,
       // Real-time quote
       let realtimeLine = "";
       try {
-        const rt = await tiingoFetch<Array<Record<string, unknown>>>("/fx", { tickers: "usdmxn" });
+        const rt = await tiingoFetch<Array<Record<string, unknown>>>("/tiingo/fx/top", { tickers: "usdmxn" });
         if (rt.length) {
           const q = rt[0];
           realtimeLine = `**USD/MXN** | Mid: ${Number(q["midPrice"]).toFixed(4)} | Bid: ${Number(q["bidPrice"]).toFixed(4)} | Ask: ${Number(q["askPrice"]).toFixed(4)} | ${String(q["timestamp"]).slice(0, 19)}\n\n`;
@@ -132,7 +132,7 @@ Returns: Current rate, daily change, and last 5 days of history`,
       }
 
       // Historical
-      const hist = await tiingoFetch<Array<{ priceData: Array<{ date: string; open: number; high: number; low: number; close: number }> }>>("/fx/prices", {
+      const hist = await tiingoFetch<Array<{ priceData: Array<{ date: string; open: number; high: number; low: number; close: number }> }>>("/tiingo/fx/prices", {
         tickers: "usdmxn",
         startDate: defaultStartDate(days),
         endDate: todayDate(),

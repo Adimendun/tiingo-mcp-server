@@ -39,7 +39,7 @@ Returns: OHLC price data per forex pair`,
         resampleFreq
       };
 
-      const data = await tiingoFetch<TiingoForexPrice[]>("/fx/prices", params);
+      const data = await tiingoFetch<TiingoForexPrice[]>("/tiingo/fx/prices", params);
 
       if (!data.length) {
         return { content: [{ type: "text" as const, text: `No forex data found for: ${params["tickers"]}` }] };
@@ -78,7 +78,7 @@ Returns: Latest bid/ask/mid per pair`,
     },
     async ({ tickers }: { tickers: string[] }) => {
       const params = { tickers: tickers.map(t => t.toLowerCase()).join(",") };
-      const data = await tiingoFetch<Array<Record<string, unknown>>>("/fx", params);
+      const data = await tiingoFetch<Array<Record<string, unknown>>>("/tiingo/fx/top", params);
 
       if (!data.length) {
         return { content: [{ type: "text" as const, text: `No real-time forex data for: ${params.tickers}` }] };

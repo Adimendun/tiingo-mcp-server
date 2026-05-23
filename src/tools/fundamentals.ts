@@ -21,7 +21,7 @@ Returns: List of available fundamental metric names and descriptions`,
     },
     async ({ ticker }: { ticker: string }) => {
       const data = await tiingoFetch<Array<{ dataCode: string; name: string; description: string; unit: string; statementType: string }>>(
-        `/fundamentals/${ticker.toUpperCase()}/definitions`
+        `/tiingo/fundamentals/${ticker.toUpperCase()}/definitions`
       );
 
       if (!data.length) {
@@ -85,7 +85,7 @@ Returns: Financial statement data rows with metric values`,
         frequency
       };
 
-      const data = await tiingoFetch<Array<Record<string, unknown>>>(`/fundamentals/${ticker.toUpperCase()}/statements`, params);
+      const data = await tiingoFetch<Array<Record<string, unknown>>>(`/tiingo/fundamentals/${ticker.toUpperCase()}/statements`, params);
 
       if (!data.length) {
         return { content: [{ type: "text" as const, text: `No fundamentals data found for ${ticker}.` }] };
@@ -135,7 +135,7 @@ Returns: Daily fundamental metrics including valuation ratios`,
         endDate: endDate ?? new Date().toISOString().split("T")[0]
       };
 
-      const data = await tiingoFetch<Array<Record<string, unknown>>>(`/fundamentals/${ticker.toUpperCase()}/daily`, params);
+      const data = await tiingoFetch<Array<Record<string, unknown>>>(`/tiingo/fundamentals/${ticker.toUpperCase()}/daily`, params);
 
       if (!data.length) {
         return { content: [{ type: "text" as const, text: `No daily fundamentals available for ${ticker}.` }] };

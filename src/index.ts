@@ -41,11 +41,6 @@ async function runHTTP(): Promise<void> {
     res.json({ status: "ok", server: "tiingo-mcp-server", version: "1.1.0" });
   });
 
-  app.get(mcpPath, (_req, res) => {
-    res.setHeader("Allow", "POST");
-    res.status(405).json({ error: "Method Not Allowed. Use POST." });
-  });
-  
   app.post(mcpPath, async (req, res) => {
     const server = createServer();
     const transport = new StreamableHTTPServerTransport({

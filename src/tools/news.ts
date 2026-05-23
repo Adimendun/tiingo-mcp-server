@@ -46,7 +46,7 @@ Returns: List of news articles with metadata`,
       if (tickers?.length) params["tickers"] = tickers.map(t => t.toUpperCase()).join(",");
       if (tags?.length) params["tags"] = tags.join(",");
 
-      const data = await tiingoFetch<TiingoNewsItem[]>("/news", params);
+      const data = await tiingoFetch<TiingoNewsItem[]>("/tiingo/news", params);
 
       if (!data.length) {
         return { content: [{ type: "text" as const, text: "No news articles found for the given filters." }] };

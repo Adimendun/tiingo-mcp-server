@@ -43,7 +43,7 @@ Returns: OHLCV price data per ticker`,
       };
       if (exchanges?.length) params["exchanges"] = exchanges.join(",");
 
-      const data = await tiingoFetch<TiingoCryptoPriceData[]>("/crypto/prices", params);
+      const data = await tiingoFetch<TiingoCryptoPriceData[]>("/tiingo/crypto/prices", params);
 
       if (!data.length) {
         return { content: [{ type: "text" as const, text: `No crypto data found for: ${params["tickers"]}` }] };
@@ -82,7 +82,7 @@ Returns: Latest quote data per crypto pair`,
     },
     async ({ tickers }: { tickers: string[] }) => {
       const params = { tickers: tickers.map(t => t.toLowerCase()).join(",") };
-      const data = await tiingoFetch<Array<Record<string, unknown>>>("/crypto", params);
+      const data = await tiingoFetch<Array<Record<string, unknown>>>("/tiingo/crypto/top", params);
 
       if (!data.length) {
         return { content: [{ type: "text" as const, text: `No real-time crypto data for: ${params.tickers}` }] };
