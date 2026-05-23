@@ -9,12 +9,13 @@ import { registerNewsTools } from "./tools/news.js";
 import { registerFundamentalsTools } from "./tools/fundamentals.js";
 import { registerCryptoTools } from "./tools/crypto.js";
 import { registerForexTools } from "./tools/forex.js";
+import { registerScreenerTools } from "./tools/screener.js";
 
 // ── Server factory ───────────────────────────────────────────────────────────
 function createServer(): McpServer {
   const server = new McpServer({
     name: "tiingo-mcp-server",
-    version: "1.0.0"
+    version: "1.1.0"
   });
 
   registerPriceTools(server);
@@ -22,8 +23,26 @@ function createServer(): McpServer {
   registerFundamentalsTools(server);
   registerCryptoTools(server);
   registerForexTools(server);
+  registerScreenerTools(server);
 
   return server;
+}
+
+// ── Auth middleware ──────────────────────────────────────────────────────────
+function authMiddleware(req: express.Request, res: express.Response, next: express.NextFunction): void {
+  const apiKey = process.env.MCP_API_KEY;
+  if (!apiKey) { next(); return; }
+
+  const provided =
+    (req.headers["x-api-key"] as string) ??
+    req.headers["authorization"]?.replace(/^Bearer\s+/i, "") ??
+    undefined;
+
+  if (provided !== apiKey) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  next();
 }
 
 // ── HTTP transport (for Railway / remote hosting) ────────────────────────────
@@ -31,12 +50,12 @@ async function runHTTP(): Promise<void> {
   const app = express();
   app.use(express.json());
 
-  // Health check for Railway
+  // Health check — no auth
   app.get("/health", (_req, res) => {
-    res.json({ status: "ok", server: "tiingo-mcp-server", version: "1.0.0" });
+    res.json({ status: "ok", server: "tiingo-mcp-server", version: "1.1.0" });
   });
 
-  app.post("/mcp", async (req, res) => {
+  app.post("/mcp", authMiddleware, async (req, res) => {
     const server = createServer();
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
