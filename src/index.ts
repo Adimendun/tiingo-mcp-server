@@ -28,34 +28,20 @@ function createServer(): McpServer {
   return server;
 }
 
-// ── Auth middleware ──────────────────────────────────────────────────────────
-function authMiddleware(req: express.Request, res: express.Response, next: express.NextFunction): void {
-  const apiKey = process.env.MCP_API_KEY;
-  if (!apiKey) { next(); return; }
-
-  const provided =
-    (req.headers["x-api-key"] as string) ??
-    req.headers["authorization"]?.replace(/^Bearer\s+/i, "") ??
-    undefined;
-
-  if (provided !== apiKey) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
-  next();
-}
-
 // ── HTTP transport (for Railway / remote hosting) ────────────────────────────
 async function runHTTP(): Promise<void> {
   const app = express();
   app.use(express.json());
 
-  // Health check — no auth
+  // Secret path from env var — if set, endpoint becomes /mcp/{secret}
+  const secret = process.env.MCP_SECRET_PATH ?? "";
+  const mcpPath = secret ? `/mcp/${secret}` : "/mcp";
+
   app.get("/health", (_req, res) => {
     res.json({ status: "ok", server: "tiingo-mcp-server", version: "1.1.0" });
   });
 
-  app.post("/mcp", authMiddleware, async (req, res) => {
+  app.post(mcpPath, async (req, res) => {
     const server = createServer();
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
@@ -69,7 +55,7 @@ async function runHTTP(): Promise<void> {
   const port = parseInt(process.env.PORT ?? "3000");
   app.listen(port, () => {
     console.error(`Tiingo MCP server running on port ${port}`);
-    console.error(`MCP endpoint: http://localhost:${port}/mcp`);
+    console.error(`MCP endpoint: http://localhost:${port}${mcpPath}`);
   });
 }
 
