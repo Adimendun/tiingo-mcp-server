@@ -4,6 +4,23 @@ import { z } from "zod";
 import { tiingoFetch, defaultStartDate, todayDate } from "../services/tiingo.js";
 import type { TiingoIexQuote } from "../types.js";
 
+// Helper: get the latest record by date without assuming sort order.
+function latestByDate<T extends Record<string, unknown>>(rows: T[]): T | undefined {
+  if (!rows.length) return undefined;
+  return [...rows].sort(
+    (a, b) => new Date(String(b["date"])).getTime() - new Date(String(a["date"])).getTime()
+  )[0];
+}
+
+interface ForexBar {
+  date: string;
+  ticker: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+}
+
 export function registerScreenerTools(server: McpServer): void {
 
   // ── Compare multiple tickers ─────────────────────────────────────────────
@@ -26,21 +43,21 @@ Returns: Comparison table with price, change%, volume, and available valuation m
       // Fetch real-time quotes
       const quotes = await tiingoFetch<TiingoIexQuote[]>(`/iex`, { tickers: upperTickers.join(",") });
 
-      // Fetch daily fundamentals for each ticker (best effort)
+      // Fetch daily fundamentals per ticker (best effort, 30-day window).
       const fundamentals: Record<string, Record<string, unknown>> = {};
       await Promise.all(upperTickers.map(async (ticker) => {
         try {
-          const data = await tiingoFetch<Array<Record<string, unknown>>>(`/tiingo/fundamentals/${ticker}/daily`, {
-            startDate: defaultStartDate(7),
-            endDate: todayDate()
-          });
-          if (data.length) fundamentals[ticker] = data[data.length - 1];
+          const data = await tiingoFetch<Array<Record<string, unknown>>>(
+            `/tiingo/fundamentals/${ticker}/daily`,
+            { startDate: defaultStartDate(30), endDate: todayDate() }
+          );
+          const latest = latestByDate(data);
+          if (latest) fundamentals[ticker] = latest;
         } catch {
-          // Some tickers may not have fundamentals
+          // Some tickers may not have fundamentals — silently skip.
         }
       }));
 
-      // Build comparison
       const lines = upperTickers.map(ticker => {
         const q = quotes.find(q => q.ticker === ticker);
         const f = fundamentals[ticker];
@@ -107,12 +124,16 @@ Returns: All tickers with prices sorted by movement, significant movers highligh
   );
 
   // ── Quick USDMXN ─────────────────────────────────────────────────────────
+  // FIX v1.1.2: forex historical URL needs the ticker IN THE PATH, and the
+  // response is a flat array of bars (not wrapped). See forex.ts for context.
   server.registerTool(
     "tiingo_usdmxn",
     {
       title: "USD/MXN Quick Quote",
-      description: `Get the current USD/MXN exchange rate and recent history. No parameters needed — just call it.
-Returns: Current rate, daily change, and last 5 days of history`,
+      description: `Get the current USD/MXN exchange rate and recent history.
+Args:
+  - days (number): Days of history to show, 1-90 (default: 5)
+Returns: Current rate, daily change, and last N days of history`,
       inputSchema: {
         days: z.number().int().min(1).max(90).default(5).describe("Days of history to show (default 5)")
       },
@@ -125,27 +146,28 @@ Returns: Current rate, daily change, and last 5 days of history`,
         const rt = await tiingoFetch<Array<Record<string, unknown>>>("/tiingo/fx/top", { tickers: "usdmxn" });
         if (rt.length) {
           const q = rt[0];
-          realtimeLine = `**USD/MXN** | Mid: ${Number(q["midPrice"]).toFixed(4)} | Bid: ${Number(q["bidPrice"]).toFixed(4)} | Ask: ${Number(q["askPrice"]).toFixed(4)} | ${String(q["timestamp"]).slice(0, 19)}\n\n`;
+          realtimeLine = `**USD/MXN** | Mid: ${Number(q["midPrice"]).toFixed(4)} | Bid: ${Number(q["bidPrice"]).toFixed(4)} | Ask: ${Number(q["askPrice"]).toFixed(4)} | ${String(q["quoteTimestamp"] ?? "").slice(0, 19)}\n\n`;
         }
       } catch {
         // Fall back to historical only
       }
 
-      // Historical
-      const hist = await tiingoFetch<Array<{ priceData: Array<{ date: string; open: number; high: number; low: number; close: number }> }>>("/tiingo/fx/prices", {
-        tickers: "usdmxn",
-        startDate: defaultStartDate(days),
-        endDate: todayDate(),
-        resampleFreq: "1day"
-      });
-
+      // Historical — ticker in path, flat-array response.
       let histLines = "";
-      if (hist.length && hist[0].priceData?.length) {
-        const pd = hist[0].priceData;
-        histLines = "**Last " + pd.length + " days:**\n" +
-          pd.slice(-days).map(b =>
-            `${b.date.slice(0, 10)} | O:${b.open.toFixed(4)} H:${b.high.toFixed(4)} L:${b.low.toFixed(4)} C:${b.close.toFixed(4)}`
-          ).join("\n");
+      try {
+        const bars = await tiingoFetch<ForexBar[]>(
+          "/tiingo/fx/usdmxn/prices",
+          { startDate: defaultStartDate(days), endDate: todayDate(), resampleFreq: "1day" }
+        );
+
+        if (bars.length) {
+          histLines = "**Last " + bars.length + " days:**\n" +
+            bars.slice(-days).map(b =>
+              `${b.date.slice(0, 10)} | O:${b.open.toFixed(4)} H:${b.high.toFixed(4)} L:${b.low.toFixed(4)} C:${b.close.toFixed(4)}`
+            ).join("\n");
+        }
+      } catch (err) {
+        histLines = `Historical lookup failed: ${err instanceof Error ? err.message : String(err)}`;
       }
 
       return { content: [{ type: "text" as const, text: realtimeLine + histLines }] };

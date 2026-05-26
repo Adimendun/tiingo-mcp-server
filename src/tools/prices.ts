@@ -126,18 +126,26 @@ Returns: Intraday OHLCV bars`,
       endDate?: string;
       resampleFreq: "1min" | "5min" | "15min" | "30min" | "1hour";
     }) => {
+      // FIX v1.1.2: Tiingo's IEX intraday endpoint only returns `volume` when
+      // explicitly requested via the `columns` parameter. Without this param,
+      // every bar's volume is undefined and rendered as NaN.
+      // Doc reference: "This value will only be exposed if explicitly passed
+      // to the 'columns' request parameter."
       const params: Record<string, string> = {
         startDate: startDate ?? todayDate(),
         endDate: endDate ?? todayDate(),
-        resampleFreq
+        resampleFreq,
+        columns: "open,high,low,close,volume"
       };
-      const data = await tiingoFetch<Array<Record<string, unknown>>>(`/iex/${ticker.toUpperCase()}`, params);
+      const data = await tiingoFetch<Array<Record<string, unknown>>>(`/iex/${ticker.toUpperCase()}/prices`, params);
       if (!data.length) {
         return { content: [{ type: "text" as const, text: `No intraday data for ${ticker} on the given date(s).` }] };
       }
-      const lines = data.slice(-20).map(b =>
-        `${String(b["date"]).slice(0, 19)} | O:${Number(b["open"]).toFixed(2)} H:${Number(b["high"]).toFixed(2)} L:${Number(b["low"]).toFixed(2)} C:${Number(b["close"]).toFixed(2)} V:${Number(b["volume"]).toLocaleString()}`
-      );
+      const lines = data.slice(-20).map(b => {
+        const vol = b["volume"];
+        const volStr = vol !== null && vol !== undefined ? Number(vol).toLocaleString() : "—";
+        return `${String(b["date"]).slice(0, 19)} | O:${Number(b["open"]).toFixed(2)} H:${Number(b["high"]).toFixed(2)} L:${Number(b["low"]).toFixed(2)} C:${Number(b["close"]).toFixed(2)} V:${volStr}`;
+      });
       const text = `**${ticker.toUpperCase()}** intraday (${resampleFreq}) — ${params["startDate"]} to ${params["endDate"]}\nBars returned: ${data.length} (showing last 20)\n\n${lines.join("\n")}`;
       return { content: [{ type: "text" as const, text }] };
     }

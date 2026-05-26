@@ -67,14 +67,24 @@ Returns: OHLCV price data per ticker`,
   );
 
   // ── Crypto real-time top-of-book ─────────────────────────────────────────
+  // NOTE v1.1.2: Tiingo has officially deprecated /tiingo/crypto/top. Per their
+  // docs they cite unreliable bid/ask construction across 60+ crypto exchanges.
+  // The endpoint may return degraded data or stop working entirely. For "last
+  // price only" use tiingo_crypto_prices with resampleFreq=1min and read the
+  // latest bar.
   server.registerTool(
     "tiingo_crypto_realtime",
     {
-      title: "Crypto Real-Time Quote",
+      title: "Crypto Real-Time Quote (DEPRECATED)",
       description: `Get real-time top-of-book crypto quotes (latest trade price, bid, ask).
+
+⚠️ DEPRECATED: Tiingo has officially deprecated this endpoint due to unreliable
+bid/ask data across crypto exchanges. May return degraded or null data.
+For last price only, prefer tiingo_crypto_prices with resampleFreq=1min.
+
 Args:
   - tickers (string[]): Crypto tickers, e.g. ["btcusd", "ethusd"]
-Returns: Latest quote data per crypto pair`,
+Returns: Latest quote data per crypto pair (best effort)`,
       inputSchema: {
         tickers: z.array(z.string().min(3).max(20)).min(1).max(10).describe("Crypto tickers")
       },
@@ -85,7 +95,7 @@ Returns: Latest quote data per crypto pair`,
       const data = await tiingoFetch<Array<Record<string, unknown>>>("/tiingo/crypto/top", params);
 
       if (!data.length) {
-        return { content: [{ type: "text" as const, text: `No real-time crypto data for: ${params.tickers}` }] };
+        return { content: [{ type: "text" as const, text: `No real-time crypto data for: ${params.tickers} (endpoint deprecated by Tiingo)` }] };
       }
 
       const lines = data.map(item => {
