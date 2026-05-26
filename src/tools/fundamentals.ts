@@ -98,8 +98,10 @@ Returns: Financial statement data rows with metric values`,
           const date = String(row["date"] ?? row["year"] ?? "").slice(0, 10);
           const quarter = row["quarter"] ? `Q${row["quarter"]}` : "";
 
-          // Tiingo nests financial data inside statementData
-          const stmtData = row["statementData"];
+          // Tiingo nests data under the statement type key (e.g. "incomeStatement", "balanceSheet", "cashFlow")
+          const metaKeys = ["date", "year", "quarter", "statementType"];
+          const dataKey = Object.keys(row).find(k => !metaKeys.includes(k));
+          const stmtData = dataKey ? row[dataKey] : undefined;
           let entries = "";
 
           if (Array.isArray(stmtData)) {
