@@ -96,12 +96,43 @@ Returns: Financial statement data rows with metric values`,
       const text = `**${ticker.toUpperCase()}** — ${statementType} (${frequency})\nPeriods: ${data.length} total | Showing last ${recent.length}\n\n` +
         recent.map(row => {
           const date = String(row["date"] ?? row["year"] ?? "").slice(0, 10);
-          const entries = Object.entries(row)
-            .filter(([k]) => !["date", "year", "quarter", "statementType"].includes(k))
-            .slice(0, 15)
-            .map(([k, v]) => `  ${k}: ${v !== null && v !== undefined ? Number(v).toLocaleString() : "—"}`)
-            .join("\n");
-          return `**${date}**\n${entries}`;
+          const quarter = row["quarter"] ? `Q${row["quarter"]}` : "";
+
+          // Tiingo nests financial data inside statementData
+          const stmtData = row["statementData"];
+          let entries = "";
+
+          if (Array.isArray(stmtData)) {
+            // Array of { dataCode, value } objects
+            entries = stmtData
+              .slice(0, 25)
+              .map((item: Record<string, unknown>) => {
+                const code = String(item["dataCode"] ?? item["name"] ?? "unknown");
+                const val = item["value"];
+                const formatted = val !== null && val !== undefined ? Number(val).toLocaleString() : "—";
+                return `  ${code}: ${formatted}`;
+              })
+              .join("\n");
+          } else if (stmtData && typeof stmtData === "object") {
+            // Object with dataCode keys
+            entries = Object.entries(stmtData as Record<string, unknown>)
+              .slice(0, 25)
+              .map(([k, v]) => {
+                const val = typeof v === "object" && v !== null ? (v as Record<string, unknown>)["value"] ?? v : v;
+                const formatted = val !== null && val !== undefined ? Number(val).toLocaleString() : "—";
+                return `  ${k}: ${formatted}`;
+              })
+              .join("\n");
+          } else {
+            // Flat structure fallback
+            entries = Object.entries(row)
+              .filter(([k]) => !["date", "year", "quarter", "statementType"].includes(k))
+              .slice(0, 25)
+              .map(([k, v]) => `  ${k}: ${v !== null && v !== undefined ? String(v) : "—"}`)
+              .join("\n");
+          }
+
+          return `**${date} ${quarter}**\n${entries}`;
         }).join("\n\n---\n\n");
 
       return {
