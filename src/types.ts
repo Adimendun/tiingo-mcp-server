@@ -25,27 +25,26 @@ export interface TiingoDailyPrice {
   splitFactor: number;
 }
 
-// IEX TOPS quote, per Tiingo doc. Fields marked "entitled" are null unless
-// the user is registered with IEX Exchange and has a market data agreement
-// in place (per Feb 1, 2025 IEX policy change).
+// IEX TOPS quote, per Tiingo doc. Entitled fields are null without IEX
+// market-data agreement (per Feb 1, 2025 IEX policy change).
 export interface TiingoIexQuote {
   ticker: string;
   timestamp: string;
-  quoteTimestamp: string | null;       // entitled
-  lastSaleTimestamp: string | null;    // entitled
-  last: number | null;                 // entitled — the actual field name (was incorrectly typed as lastSalePrice)
-  lastSize: number | null;             // entitled
-  tngoLast: number;                    // Tiingo-derived, always available
+  quoteTimestamp: string | null;
+  lastSaleTimestamp: string | null;
+  last: number | null;
+  lastSize: number | null;
+  tngoLast: number;
   prevClose: number;
   open: number;
   high: number;
   low: number;
   mid: number | null;
   volume: number;
-  bidSize: number | null;              // entitled
-  bidPrice: number | null;             // entitled
-  askSize: number | null;              // entitled
-  askPrice: number | null;             // entitled
+  bidSize: number | null;
+  bidPrice: number | null;
+  askSize: number | null;
+  askPrice: number | null;
 }
 
 export interface TiingoNewsItem {
@@ -60,7 +59,7 @@ export interface TiingoNewsItem {
   tags: string[];
 }
 
-// Tiingo /fundamentals/{ticker}/statements rows
+// Fundamentals statements
 export interface TiingoStatementMetric {
   dataCode: string;
   value: number | null;
@@ -78,16 +77,16 @@ export interface TiingoStatementRow {
   };
 }
 
-// Definitions endpoint (global, no ticker)
+// Definitions endpoint (global)
 export interface TiingoFundamentalDefinition {
   dataCode: string;
   name: string;
   description: string;
-  units: string;          // per doc this is `units` (plural), not `unit`
+  units: string;
   statementType: string;
 }
 
-// Daily fundamentals (P/E, market cap, EV/EBITDA, etc.)
+// Daily fundamentals
 export interface TiingoFundamentalDaily {
   date: string;
   marketCap?: number;
@@ -97,6 +96,68 @@ export interface TiingoFundamentalDaily {
   trailingPEG1Y?: number;
 }
 
+// Fundamentals meta endpoint - per-ticker company classification
+export interface TiingoFundamentalMeta {
+  permaTicker: string;
+  ticker: string;
+  name: string;
+  isActive: boolean;
+  isADR: boolean;
+  sector: string | null;
+  industry: string | null;
+  sicCode: number | null;
+  sicSector: string | null;
+  sicIndustry: string | null;
+  reportingCurrency: string | null;
+  location: string | null;
+  companyWebsite: string | null;
+  secFilingWebsite: string | null;
+  statementLastUpdated: string | null;
+  dailyLastUpdated: string | null;
+}
+
+// Corporate actions — distributions (dividends)
+// NOTE: Tiingo doc literally spells the JSON field "distributionFreqency" (typo).
+// Keep that exact spelling — it's what the API returns.
+export interface TiingoDistribution {
+  permaTicker: string;
+  ticker: string;
+  exDate: string;
+  paymentDate: string | null;
+  recordDate: string | null;
+  declarationDate: string | null;
+  distribution: number;
+  distributionFreqency: string;  // sic — Tiingo's field name has a typo
+}
+
+// Distribution yield timeseries
+export interface TiingoDistributionYield {
+  date: string;
+  trailingDiv1Y: number | string;
+}
+
+// Corporate actions — splits
+export interface TiingoSplit {
+  permaTicker: string;
+  ticker: string;
+  exDate: string;
+  splitFrom: number;
+  splitTo: number;
+  splitFactor: number;
+  splitStatus: "a" | "c";   // a = Active, c = Cancelled
+}
+
+// Search results
+export interface TiingoSearchResult {
+  ticker: string;
+  name: string;
+  assetType: string;       // Stock | ETF | Mutual Fund
+  isActive: boolean;
+  permaTicker: string;
+  openFIGI: string | null;
+}
+
+// Crypto
 export interface TiingoCryptoTicker {
   ticker: string;
   name: string;
@@ -121,8 +182,7 @@ export interface TiingoCryptoPriceData {
   }>;
 }
 
-// Forex bars come back as a FLAT array, not wrapped.
-// Example: GET /tiingo/fx/eurusd/prices → [{date, ticker, open, high, low, close}, ...]
+// Forex bars come back as a flat array (not wrapped, unlike crypto)
 export interface TiingoForexBar {
   date: string;
   ticker: string;
@@ -131,3 +191,18 @@ export interface TiingoForexBar {
   low: number;
   close: number;
 }
+
+// Human-readable mapping of Tiingo's distribution frequency codes
+export const DISTRIBUTION_FREQUENCY: Record<string, string> = {
+  w: "Weekly",
+  bm: "Bimonthly",
+  m: "Monthly",
+  tm: "Trimesterly",
+  q: "Quarterly",
+  sa: "Semiannually",
+  a: "Annually",
+  ir: "Irregular",
+  f: "Final",
+  u: "Unspecified",
+  c: "Cancelled"
+};

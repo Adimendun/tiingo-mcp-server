@@ -2,6 +2,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { tiingoFetch } from "../services/tiingo.js";
+import type { TiingoFundamentalMeta } from "../types.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tiingo's /fundamentals/{ticker}/statements endpoint returns rows shaped like:
@@ -21,6 +22,8 @@ import { tiingoFetch } from "../services/tiingo.js";
 //   - With frequency=quarterly, Tiingo also includes the fiscal-year aggregate
 //     for Q4-end dates, with quarter=0. Filter it out for cleanliness.
 //   - Definitions endpoint is GLOBAL (no ticker in URL). Per-ticker returns 404.
+//   - Meta endpoint is GLOBAL with optional `tickers=` filter for company
+//     classification (sector, industry, SIC, isADR, permaTicker, etc.).
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface StatementMetric {
@@ -39,7 +42,7 @@ interface DefinitionItem {
   dataCode: string;
   name: string;
   description: string;
-  units: string;            // per Tiingo doc this is `units` (plural), not `unit`
+  units: string;
   statementType: string;
 }
 
@@ -76,9 +79,6 @@ function periodLabel(row: StatementRow): string {
 export function registerFundamentalsTools(server: McpServer): void {
 
   // ── Fundamentals definitions (global; ticker-agnostic) ───────────────────
-  // FIX v1.1.2: previous code called /fundamentals/{ticker}/definitions which
-  // returns 404. The Tiingo doc shows definitions is a GLOBAL endpoint that
-  // describes the universe of available metrics, independent of any ticker.
   server.registerTool(
     "tiingo_fundamentals_definitions",
     {
@@ -112,6 +112,70 @@ Returns: List of metric names and descriptions, grouped by statement type.`,
       return {
         content: [{ type: "text" as const, text: `Fundamental metrics (${data.length} total)\n\n${lines.join("\n\n")}` }]
       };
+    }
+  );
+
+  // ── Fundamentals meta (company classification) ───────────────────────────
+  // NEW in v1.2.0. Returns sector/industry/SIC/isADR/permaTicker for each
+  // ticker. Useful for stock-analysis workflows where you want to categorize
+  // companies before drilling into financials.
+  //
+  // The Tiingo doc shows a global endpoint `/tiingo/fundamentals/meta`. We
+  // pass `tickers=` as a query param to filter server-side, and also filter
+  // client-side as a safety net in case the server returns more than requested.
+  server.registerTool(
+    "tiingo_fundamentals_meta",
+    {
+      title: "Fundamentals Meta",
+      description: `Get company classification metadata (sector, industry, SIC, isADR, permaTicker, location) for one or more tickers.
+Useful for grouping/screening companies before pulling their financials.
+Args:
+  - tickers (string[]): 1-15 ticker symbols, e.g. ["AAPL", "MSFT", "TSM"]
+Returns: One row per ticker with sector, industry, SIC, isADR flag, reporting currency, location, and last-updated timestamps.`,
+      inputSchema: {
+        tickers: z.array(z.string().min(1).max(10)).min(1).max(15).describe("Ticker symbols (1-15)")
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true }
+    },
+    async ({ tickers }: { tickers: string[] }) => {
+      const upper = tickers.map(t => t.toUpperCase());
+      const data = await tiingoFetch<TiingoFundamentalMeta[]>(
+        `/tiingo/fundamentals/meta`,
+        { tickers: upper.join(",") }
+      );
+
+      if (!data.length) {
+        return { content: [{ type: "text" as const, text: `No meta data found for: ${upper.join(", ")}` }] };
+      }
+
+      // Filter client-side as safety net + preserve requested order
+      const requested = new Set(upper);
+      const byTicker = new Map<string, TiingoFundamentalMeta>();
+      for (const row of data) {
+        const t = String(row.ticker ?? "").toUpperCase();
+        if (requested.has(t)) byTicker.set(t, row);
+      }
+
+      const lines = upper.map(t => {
+        const m = byTicker.get(t);
+        if (!m) return `**${t}**: not found`;
+
+        const adr = m.isADR ? " (ADR)" : "";
+        const active = m.isActive ? "" : " [DELISTED]";
+        const sector = m.sector || m.sicSector || "—";
+        const industry = m.industry || m.sicIndustry || "—";
+        const sic = m.sicCode ? ` | SIC ${m.sicCode}` : "";
+        const loc = m.location ? ` | ${m.location}` : "";
+        const curr = m.reportingCurrency ? ` | Reports in ${m.reportingCurrency}` : "";
+        const stmtUpd = m.statementLastUpdated ? String(m.statementLastUpdated).slice(0, 10) : "—";
+
+        return `**${t}**${adr}${active} — ${m.name}\n` +
+               `  Sector: ${sector} | Industry: ${industry}${sic}\n` +
+               `  PermaTicker: ${m.permaTicker}${loc}${curr}\n` +
+               `  Statement last updated: ${stmtUpd}`;
+      });
+
+      return { content: [{ type: "text" as const, text: lines.join("\n\n") }] };
     }
   );
 
@@ -164,13 +228,10 @@ Returns: Financial statement data rows with metric values`,
         return { content: [{ type: "text" as const, text: `No fundamentals data found for ${ticker}.` }] };
       }
 
-      // Drop FY aggregate rows when caller asked for quarterly snapshots.
-      // Per Tiingo doc: quarter=0 means Annual Report, quarter=1-4 means quarterly.
       const filtered = frequency === "quarterly"
         ? raw.filter(r => r.quarter >= 1 && r.quarter <= 4)
         : raw;
 
-      // Normalize to date-DESCENDING so "most recent" is index 0.
       const sorted = [...filtered].sort(
         (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
       );
@@ -240,7 +301,6 @@ Returns: Daily fundamental metrics including valuation ratios`,
         return { content: [{ type: "text" as const, text: `No daily fundamentals available for ${ticker}.` }] };
       }
 
-      // Don't assume Tiingo's sort order — sort and pick the latest.
       const sorted = [...data].sort(
         (a, b) => new Date(String(b["date"])).getTime() - new Date(String(a["date"])).getTime()
       );

@@ -10,12 +10,14 @@ import { registerFundamentalsTools } from "./tools/fundamentals.js";
 import { registerCryptoTools } from "./tools/crypto.js";
 import { registerForexTools } from "./tools/forex.js";
 import { registerScreenerTools } from "./tools/screener.js";
+import { registerCorporateActionsTools } from "./tools/corporate-actions.js";
+import { registerUtilitiesTools } from "./tools/utilities.js";
 
 // ── Server factory ───────────────────────────────────────────────────────────
 function createServer(): McpServer {
   const server = new McpServer({
     name: "tiingo-mcp-server",
-    version: "1.1.0"
+    version: "1.2.0"
   });
 
   registerPriceTools(server);
@@ -24,6 +26,8 @@ function createServer(): McpServer {
   registerCryptoTools(server);
   registerForexTools(server);
   registerScreenerTools(server);
+  registerCorporateActionsTools(server);
+  registerUtilitiesTools(server);
 
   return server;
 }
@@ -38,7 +42,7 @@ async function runHTTP(): Promise<void> {
   const mcpPath = secret ? `/mcp/${secret}` : "/mcp";
 
   app.get("/health", (_req, res) => {
-    res.json({ status: "ok", server: "tiingo-mcp-server", version: "1.1.0" });
+    res.json({ status: "ok", server: "tiingo-mcp-server", version: "1.2.0" });
   });
 
   app.post(mcpPath, async (req, res) => {
