@@ -91,6 +91,11 @@ Returns: Financial statement data rows with metric values`,
         return { content: [{ type: "text" as const, text: `No fundamentals data found for ${ticker}.` }] };
       }
 
+      // Debug: show raw JSON of first record to understand structure
+      const firstRow = data[0];
+      const rawKeys = Object.keys(firstRow).join(", ");
+      const rawSample = JSON.stringify(firstRow, null, 2).slice(0, 3000);
+
       // Show last 4 periods for readability
       const recent = data.slice(-4);
       const text = `**${ticker.toUpperCase()}** — ${statementType} (${frequency})\nPeriods: ${data.length} total | Showing last ${recent.length}\n\n` +
@@ -137,8 +142,9 @@ Returns: Financial statement data rows with metric values`,
           return `**${date} ${quarter}**\n${entries}`;
         }).join("\n\n---\n\n");
 
+      const debugText = `\n\n---\n**DEBUG — Raw keys:** ${rawKeys}\n**First record sample:**\n\`\`\`json\n${rawSample}\n\`\`\``;
       return {
-        content: [{ type: "text" as const, text }],
+        content: [{ type: "text" as const, text: text + debugText }],
         // structured
       };
     }
